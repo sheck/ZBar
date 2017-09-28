@@ -71,7 +71,6 @@ typedef struct _ZBarGtkPrivate
      * protected by main gui lock
      */
     unsigned req_width, req_height;
-    unsigned video_width, video_height;
     gboolean video_opened;
 
     /* window is shared: owned by main gui thread.

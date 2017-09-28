@@ -212,7 +212,6 @@ Section "Development Headers and Libraries" SecDevel
     SetOutPath $INSTDIR\lib
     File lib\libzbar-0.def
     File lib\libzbar-0.lib
-    File lib\libzbar.dll.a
 
     SetOutPath $INSTDIR\examples
     File share\zbar\scan_image.cpp

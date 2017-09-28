@@ -1,5 +1,5 @@
 /*------------------------------------------------------------------------
- *  Copyright 2007-2010 (c) Jeff Brown <spadix@users.sourceforge.net>
+ *  Copyright 2007-2009 (c) Jeff Brown <spadix@users.sourceforge.net>
  *
  *  This file is part of the ZBar Bar Code Reader.
  *
@@ -27,15 +27,15 @@
 #include <string.h>     /* memset, strlen */
 
 #include <zbar.h>
+#include "decoder.h"
 
-#if defined(DEBUG_DECODER) || defined(DEBUG_EAN) || defined(DEBUG_CODE93) || \
-    defined(DEBUG_CODE39) || defined(DEBUG_CODABAR) || defined(DEBUG_I25) || \
-    defined(DEBUG_DATABAR) || defined(DEBUG_CODE128) || \
-    defined(DEBUG_QR_FINDER) || (defined(DEBUG_PDF417) && (DEBUG_PDF417 >= 4))
+#if defined(DEBUG_DECODER) || defined(DEBUG_EAN) ||             \
+    defined(DEBUG_CODE39) || defined(DEBUG_I25) ||              \
+    defined(DEBUG_CODE128) || defined(DEBUG_QR_FINDER) ||       \
+    (defined(DEBUG_PDF417) && (DEBUG_PDF417 >= 4))
 # define DEBUG_LEVEL 1
 #endif
 #include "debug.h"
-#include "decoder.h"
 
 zbar_decoder_t *zbar_decoder_create ()
 {
@@ -54,33 +54,14 @@ zbar_decoder_t *zbar_decoder_create ()
     dcode->ean.upce_config = 1 << ZBAR_CFG_EMIT_CHECK;
     dcode->ean.isbn10_config = 1 << ZBAR_CFG_EMIT_CHECK;
     dcode->ean.isbn13_config = 1 << ZBAR_CFG_EMIT_CHECK;
-# ifdef FIXME_ADDON_SYNC
-    dcode->ean.ean2_config = 1 << ZBAR_CFG_ENABLE;
-    dcode->ean.ean5_config = 1 << ZBAR_CFG_ENABLE;
-# endif
 #endif
 #ifdef ENABLE_I25
     dcode->i25.config = 1 << ZBAR_CFG_ENABLE;
     CFG(dcode->i25, ZBAR_CFG_MIN_LEN) = 6;
 #endif
-#ifdef ENABLE_DATABAR
-    dcode->databar.config = ((1 << ZBAR_CFG_ENABLE) |
-                             (1 << ZBAR_CFG_EMIT_CHECK));
-    dcode->databar.config_exp = ((1 << ZBAR_CFG_ENABLE) |
-                                 (1 << ZBAR_CFG_EMIT_CHECK));
-    dcode->databar.csegs = 4;
-    dcode->databar.segs = calloc(4, sizeof(*dcode->databar.segs));
-#endif
-#ifdef ENABLE_CODABAR
-    dcode->codabar.config = 1 << ZBAR_CFG_ENABLE;
-    CFG(dcode->codabar, ZBAR_CFG_MIN_LEN) = 4;
-#endif
 #ifdef ENABLE_CODE39
     dcode->code39.config = 1 << ZBAR_CFG_ENABLE;
     CFG(dcode->code39, ZBAR_CFG_MIN_LEN) = 1;
-#endif
-#ifdef ENABLE_CODE93
-    dcode->code93.config = 1 << ZBAR_CFG_ENABLE;
 #endif
 #ifdef ENABLE_CODE128
     dcode->code128.config = 1 << ZBAR_CFG_ENABLE;
@@ -98,10 +79,6 @@ zbar_decoder_t *zbar_decoder_create ()
 
 void zbar_decoder_destroy (zbar_decoder_t *dcode)
 {
-#ifdef ENABLE_DATABAR
-    if(dcode->databar.segs)
-        free(dcode->databar.segs);
-#endif
     if(dcode->buf)
         free(dcode->buf);
     free(dcode);
@@ -116,17 +93,8 @@ void zbar_decoder_reset (zbar_decoder_t *dcode)
 #ifdef ENABLE_I25
     i25_reset(&dcode->i25);
 #endif
-#ifdef ENABLE_DATABAR
-    databar_reset(&dcode->databar);
-#endif
-#ifdef ENABLE_CODABAR
-    codabar_reset(&dcode->codabar);
-#endif
 #ifdef ENABLE_CODE39
     code39_reset(&dcode->code39);
-#endif
-#ifdef ENABLE_CODE93
-    code93_reset(&dcode->code93);
 #endif
 #ifdef ENABLE_CODE128
     code128_reset(&dcode->code128);
@@ -145,24 +113,14 @@ void zbar_decoder_new_scan (zbar_decoder_t *dcode)
     memset(dcode->w, 0, sizeof(dcode->w));
     dcode->lock = 0;
     dcode->idx = 0;
-    dcode->s6 = 0;
 #ifdef ENABLE_EAN
     ean_new_scan(&dcode->ean);
 #endif
 #ifdef ENABLE_I25
     i25_reset(&dcode->i25);
 #endif
-#ifdef ENABLE_DATABAR
-    databar_new_scan(&dcode->databar);
-#endif
-#ifdef ENABLE_CODABAR
-    codabar_reset(&dcode->codabar);
-#endif
 #ifdef ENABLE_CODE39
     code39_reset(&dcode->code39);
-#endif
-#ifdef ENABLE_CODE93
-    code93_reset(&dcode->code93);
 #endif
 #ifdef ENABLE_CODE128
     code128_reset(&dcode->code128);
@@ -191,14 +149,9 @@ unsigned int zbar_decoder_get_data_length (const zbar_decoder_t *dcode)
     return(dcode->buflen);
 }
 
-int zbar_decoder_get_direction (const zbar_decoder_t *dcode)
-{
-    return(dcode->direction);
-}
-
 zbar_decoder_handler_t *
 zbar_decoder_set_handler (zbar_decoder_t *dcode,
-                          zbar_decoder_handler_t *handler)
+                          zbar_decoder_handler_t handler)
 {
     zbar_decoder_handler_t *result = dcode->handler;
     dcode->handler = handler;
@@ -221,99 +174,66 @@ zbar_symbol_type_t zbar_decoder_get_type (const zbar_decoder_t *dcode)
     return(dcode->type);
 }
 
-unsigned int zbar_decoder_get_modifiers (const zbar_decoder_t *dcode)
-{
-    return(dcode->modifiers);
-}
-
 zbar_symbol_type_t zbar_decode_width (zbar_decoder_t *dcode,
                                       unsigned w)
 {
-    zbar_symbol_type_t tmp, sym = ZBAR_NONE;
-
     dcode->w[dcode->idx & (DECODE_WINDOW - 1)] = w;
-    dbprintf(1, "    decode[%x]: w=%d (%g)\n", dcode->idx, w, (w / 32.));
-
-    /* update shared character width */
-    dcode->s6 -= get_width(dcode, 7);
-    dcode->s6 += get_width(dcode, 1);
+    dprintf(1, "    decode[%x]: w=%d (%g)\n", dcode->idx, w, (w / 32.));
 
     /* each decoder processes width stream in parallel */
-#ifdef ENABLE_QRCODE
-    if(TEST_CFG(dcode->qrf.config, ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_find_qr(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
-#endif
+    zbar_symbol_type_t sym = dcode->type = ZBAR_NONE;
+
 #ifdef ENABLE_EAN
     if((dcode->ean.enable) &&
-       (tmp = _zbar_decode_ean(dcode)))
-        sym = tmp;
+       (sym = _zbar_decode_ean(dcode)))
+        dcode->type = sym;
 #endif
 #ifdef ENABLE_CODE39
     if(TEST_CFG(dcode->code39.config, ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_decode_code39(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
-#endif
-#ifdef ENABLE_CODE93
-    if(TEST_CFG(dcode->code93.config, ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_decode_code93(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
+       (sym = _zbar_decode_code39(dcode)) > ZBAR_PARTIAL)
+        dcode->type = sym;
 #endif
 #ifdef ENABLE_CODE128
     if(TEST_CFG(dcode->code128.config, ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_decode_code128(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
-#endif
-#ifdef ENABLE_DATABAR
-    if(TEST_CFG(dcode->databar.config | dcode->databar.config_exp,
-                ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_decode_databar(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
-#endif
-#ifdef ENABLE_CODABAR
-    if(TEST_CFG(dcode->codabar.config, ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_decode_codabar(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
+       (sym = _zbar_decode_code128(dcode)) > ZBAR_PARTIAL)
+        dcode->type = sym;
 #endif
 #ifdef ENABLE_I25
     if(TEST_CFG(dcode->i25.config, ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_decode_i25(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
+       (sym = _zbar_decode_i25(dcode)) > ZBAR_PARTIAL)
+        dcode->type = sym;
 #endif
 #ifdef ENABLE_PDF417
     if(TEST_CFG(dcode->pdf417.config, ZBAR_CFG_ENABLE) &&
-       (tmp = _zbar_decode_pdf417(dcode)) > ZBAR_PARTIAL)
-        sym = tmp;
+       (sym = _zbar_decode_pdf417(dcode)) > ZBAR_PARTIAL)
+        dcode->type = sym;
+#endif
+#ifdef ENABLE_QRCODE
+    if(TEST_CFG(dcode->qrf.config, ZBAR_CFG_ENABLE) &&
+       (sym = _zbar_find_qr(dcode)) > ZBAR_PARTIAL)
+        dcode->type = sym;
 #endif
 
     dcode->idx++;
-    dcode->type = sym;
-    if(sym) {
-        if(dcode->lock && sym > ZBAR_PARTIAL && sym != ZBAR_QRCODE)
-            release_lock(dcode, sym);
+    if(dcode->type) {
         if(dcode->handler)
             dcode->handler(dcode);
+        if(dcode->lock && dcode->type > ZBAR_PARTIAL)
+            dcode->lock = 0;
     }
-    return(sym);
+    return(dcode->type);
 }
 
-static inline const unsigned int*
-decoder_get_configp (const zbar_decoder_t *dcode,
-                     zbar_symbol_type_t sym)
+static inline int decoder_set_config_bool (zbar_decoder_t *dcode,
+                                           zbar_symbol_type_t sym,
+                                           zbar_config_t cfg,
+                                           int val)
 {
-    const unsigned int *config;
+    unsigned *config = NULL;
     switch(sym) {
 #ifdef ENABLE_EAN
     case ZBAR_EAN13:
         config = &dcode->ean.ean13_config;
-        break;
-
-    case ZBAR_EAN2:
-        config = &dcode->ean.ean2_config;
-        break;
-
-    case ZBAR_EAN5:
-        config = &dcode->ean.ean5_config;
         break;
 
     case ZBAR_EAN8:
@@ -343,30 +263,9 @@ decoder_get_configp (const zbar_decoder_t *dcode,
         break;
 #endif
 
-#ifdef ENABLE_DATABAR
-    case ZBAR_DATABAR:
-        config = &dcode->databar.config;
-        break;
-    case ZBAR_DATABAR_EXP:
-        config = &dcode->databar.config_exp;
-        break;
-#endif
-
-#ifdef ENABLE_CODABAR
-    case ZBAR_CODABAR:
-        config = &dcode->codabar.config;
-        break;
-#endif
-
 #ifdef ENABLE_CODE39
     case ZBAR_CODE39:
         config = &dcode->code39.config;
-        break;
-#endif
-
-#ifdef ENABLE_CODE93
-    case ZBAR_CODE93:
-        config = &dcode->code93.config;
         break;
 #endif
 
@@ -388,27 +287,11 @@ decoder_get_configp (const zbar_decoder_t *dcode,
         break;
 #endif
 
+    /* FIXME handle addons */
+
     default:
-        config = NULL;
+        return(1);
     }
-    return(config);
-}
-
-unsigned int zbar_decoder_get_configs (const zbar_decoder_t *dcode,
-                                       zbar_symbol_type_t sym)
-{
-    const unsigned *config = decoder_get_configp(dcode, sym);
-    if(!config)
-        return(0);
-    return(*config);
-}
-
-static inline int decoder_set_config_bool (zbar_decoder_t *dcode,
-                                           zbar_symbol_type_t sym,
-                                           zbar_config_t cfg,
-                                           int val)
-{
-    unsigned *config = (void*)decoder_get_configp(dcode, sym);
     if(!config || cfg >= ZBAR_CFG_NUM)
         return(1);
 
@@ -421,8 +304,6 @@ static inline int decoder_set_config_bool (zbar_decoder_t *dcode,
 
 #ifdef ENABLE_EAN
     dcode->ean.enable = TEST_CFG(dcode->ean.ean13_config |
-                                 dcode->ean.ean2_config |
-                                 dcode->ean.ean5_config |
                                  dcode->ean.ean8_config |
                                  dcode->ean.upca_config |
                                  dcode->ean.upce_config |
@@ -446,19 +327,9 @@ static inline int decoder_set_config_int (zbar_decoder_t *dcode,
         CFG(dcode->i25, cfg) = val;
         break;
 #endif
-#ifdef ENABLE_CODABAR
-    case ZBAR_CODABAR:
-        CFG(dcode->codabar, cfg) = val;
-        break;
-#endif
 #ifdef ENABLE_CODE39
     case ZBAR_CODE39:
         CFG(dcode->code39, cfg) = val;
-        break;
-#endif
-#ifdef ENABLE_CODE93
-    case ZBAR_CODE93:
-        CFG(dcode->code93, cfg) = val;
         break;
 #endif
 #ifdef ENABLE_CODE128
@@ -484,16 +355,17 @@ int zbar_decoder_set_config (zbar_decoder_t *dcode,
                              int val)
 {
     if(sym == ZBAR_NONE) {
-        static const zbar_symbol_type_t all[] = {
-	    ZBAR_EAN13, ZBAR_EAN2, ZBAR_EAN5, ZBAR_EAN8,
-            ZBAR_UPCA, ZBAR_UPCE, ZBAR_ISBN10, ZBAR_ISBN13,
-            ZBAR_I25, ZBAR_DATABAR, ZBAR_DATABAR_EXP, ZBAR_CODABAR,
-	    ZBAR_CODE39, ZBAR_CODE93, ZBAR_CODE128, ZBAR_QRCODE, 
-	    ZBAR_PDF417, 0
-        };
-        const zbar_symbol_type_t *symp;
-        for(symp = all; *symp; symp++)
-            zbar_decoder_set_config(dcode, *symp, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_EAN13, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_EAN8, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_UPCA, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_UPCE, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_ISBN10, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_ISBN13, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_I25, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_CODE39, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_CODE128, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_PDF417, cfg, val);
+        zbar_decoder_set_config(dcode, ZBAR_QRCODE, cfg, val);
         return(0);
     }
 
@@ -513,18 +385,16 @@ const char *_zbar_decoder_buf_dump (unsigned char *buf,
                                     unsigned int buflen)
 {
     int dumplen = (buflen * 3) + 12;
-    char *p;
-    int i;
-
     if(!decoder_dump || dumplen > decoder_dumplen) {
         if(decoder_dump)
             free(decoder_dump);
         decoder_dump = malloc(dumplen);
         decoder_dumplen = dumplen;
     }
-    p = decoder_dump +
+    char *p = decoder_dump +
         snprintf(decoder_dump, 12, "buf[%04x]=",
                  (buflen > 0xffff) ? 0xffff : buflen);
+    int i;
     for(i = 0; i < buflen; i++)
         p += snprintf(p, 4, "%s%02x", (i) ? " " : "",  buf[i]);
     return(decoder_dump);

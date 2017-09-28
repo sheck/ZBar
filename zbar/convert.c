@@ -1,5 +1,5 @@
 /*------------------------------------------------------------------------
- *  Copyright 2007-2010 (c) Jeff Brown <spadix@users.sourceforge.net>
+ *  Copyright 2007-2009 (c) Jeff Brown <spadix@users.sourceforge.net>
  *
  *  This file is part of the ZBar Bar Code Reader.
  *
@@ -236,13 +236,12 @@ static inline void uv_round (zbar_image_t *img,
 static inline void uv_roundup (zbar_image_t *img,
                                const zbar_format_def_t *fmt)
 {
-    unsigned xmask, ymask;
     if(fmt->group == ZBAR_FMT_GRAY)
         return;
-    xmask = (1 << fmt->p.yuv.xsub2) - 1;
+    unsigned xmask = (1 << fmt->p.yuv.xsub2) - 1;
     if(img->width & xmask)
         img->width = (img->width + xmask) & ~xmask;
-    ymask = (1 << fmt->p.yuv.ysub2) - 1;
+    unsigned ymask = (1 << fmt->p.yuv.ysub2) - 1;
     if(img->height & ymask)
         img->height = (img->height + ymask) & ~ymask;
 }
@@ -307,18 +306,16 @@ static inline void convert_y_resize (zbar_image_t *dst,
                                      const zbar_format_def_t *srcfmt,
                                      size_t n)
 {
-    uint8_t *psrc, *pdst;
-    unsigned width, height, xpad, y;
-
     if(dst->width == src->width && dst->height == src->height) {
         memcpy((void*)dst->data, src->data, n);
         return;
     }
-    psrc = (void*)src->data;
-    pdst = (void*)dst->data;
-    width = (dst->width > src->width) ? src->width : dst->width;
-    xpad = (dst->width > src->width) ? dst->width - src->width : 0;
-    height = (dst->height > src->height) ? src->height : dst->height;
+    uint8_t *psrc = (void*)src->data;
+    uint8_t *pdst = (void*)dst->data;
+    unsigned width = (dst->width > src->width) ? src->width : dst->width;
+    unsigned xpad = (dst->width > src->width) ? dst->width - src->width : 0;
+    unsigned height = (dst->height > src->height) ? src->height : dst->height;
+    unsigned y;
     for(y = 0; y < height; y++) {
         memcpy(pdst, psrc, width);
         pdst += width;
@@ -347,10 +344,10 @@ static void convert_copy (zbar_image_t *dst,
 {
     if(src->width == dst->width &&
        src->height == dst->height) {
-        zbar_image_t *s = (zbar_image_t*)src;
         dst->data = src->data;
         dst->datalen = src->datalen;
         dst->cleanup = cleanup_ref;
+        zbar_image_t *s = (zbar_image_t*)src;
         dst->next = s;
         _zbar_image_refcnt(s, 1);
     }
@@ -365,10 +362,9 @@ static void convert_uvp_append (zbar_image_t *dst,
                                 const zbar_image_t *src,
                                 const zbar_format_def_t *srcfmt)
 {
-    unsigned long n;
     uv_roundup(dst, dstfmt);
     dst->datalen = uvp_size(dst, dstfmt) * 2;
-    n = dst->width * dst->height;
+    unsigned long n = dst->width * dst->height;
     dst->datalen += n;
     assert(src->datalen >= src->width * src->height);
     zprintf(24, "dst=%dx%d (%lx) %lx src=%dx%d %lx\n",
@@ -377,7 +373,7 @@ static void convert_uvp_append (zbar_image_t *dst,
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
     convert_y_resize(dst, dstfmt, src, srcfmt, n);
-    memset((uint8_t*)dst->data + n, 0x80, dst->datalen - n);
+    memset((void*)dst->data + n, 0x80, dst->datalen - n);
 }
 
 /* interleave YUV planes into packed YUV */
@@ -386,35 +382,32 @@ static void convert_yuv_pack (zbar_image_t *dst,
                               const zbar_image_t *src,
                               const zbar_format_def_t *srcfmt)
 {
-    unsigned long srcm, srcn;
-    uint8_t flags, *srcy, *dstp;
-    const uint8_t *srcu, *srcv;
-    unsigned srcl, xmask, ymask, x, y;
-    uint8_t y0 = 0, y1 = 0, u = 0x80, v = 0x80;
-
     uv_roundup(dst, dstfmt);
     dst->datalen = dst->width * dst->height + uvp_size(dst, dstfmt) * 2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    uint8_t *dstp = (void*)dst->data;
 
-    srcm = uvp_size(src, srcfmt);
-    srcn = src->width * src->height;
+    unsigned long srcm = uvp_size(src, srcfmt);
+    unsigned long srcn = src->width * src->height;
     assert(src->datalen >= srcn + 2 * srcn);
-    flags = dstfmt->p.yuv.packorder ^ srcfmt->p.yuv.packorder;
-    srcy = (void*)src->data;
+    uint8_t flags = dstfmt->p.yuv.packorder ^ srcfmt->p.yuv.packorder;
+    uint8_t *srcy = (void*)src->data;
+    const uint8_t *srcu, *srcv;
     if(flags & 1) {
-        srcv = (uint8_t*)src->data + srcn;
+        srcv = src->data + srcn;
         srcu = srcv + srcm;
     } else {
-        srcu = (uint8_t*)src->data + srcn;
+        srcu = src->data + srcn;
         srcv = srcu + srcm;
     }
     flags = dstfmt->p.yuv.packorder & 2;
 
-    srcl = src->width >> srcfmt->p.yuv.xsub2;
-    xmask = (1 << srcfmt->p.yuv.xsub2) - 1;
-    ymask = (1 << srcfmt->p.yuv.ysub2) - 1;
+    unsigned srcl = src->width >> srcfmt->p.yuv.xsub2;
+    unsigned xmask = (1 << srcfmt->p.yuv.xsub2) - 1;
+    unsigned ymask = (1 << srcfmt->p.yuv.ysub2) - 1;
+    unsigned x, y;
+    uint8_t y0 = 0, y1 = 0, u = 0x80, v = 0x80;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height) {
             srcy -= src->width;
@@ -455,29 +448,25 @@ static void convert_yuv_unpack (zbar_image_t *dst,
                                 const zbar_image_t *src,
                                 const zbar_format_def_t *srcfmt)
 {
-    unsigned long dstn, dstm2;
-    uint8_t *dsty, flags;
-    const uint8_t *srcp;
-    unsigned srcl, x, y;
-    uint8_t y0 = 0, y1 = 0;
-
     uv_roundup(dst, dstfmt);
-    dstn = dst->width * dst->height;
-    dstm2 = uvp_size(dst, dstfmt) * 2;
+    unsigned long dstn = dst->width * dst->height;
+    unsigned long dstm2 = uvp_size(dst, dstfmt) * 2;
     dst->datalen = dstn + dstm2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
     if(dstm2)
-        memset((uint8_t*)dst->data + dstn, 0x80, dstm2);
-    dsty = (uint8_t*)dst->data;
+        memset((void*)dst->data + dstn, 0x80, dstm2);
+    uint8_t *dsty = (void*)dst->data;
 
-    flags = srcfmt->p.yuv.packorder ^ dstfmt->p.yuv.packorder;
+    uint8_t flags = srcfmt->p.yuv.packorder ^ dstfmt->p.yuv.packorder;
     flags &= 2;
-    srcp = src->data;
+    const uint8_t *srcp = src->data;
     if(flags)
         srcp++;
 
-    srcl = src->width + (src->width >> srcfmt->p.yuv.xsub2);
+    unsigned srcl = src->width + (src->width >> srcfmt->p.yuv.xsub2);
+    unsigned x, y;
+    uint8_t y0 = 0, y1 = 0;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
             srcp -= srcl;
@@ -502,16 +491,15 @@ static void convert_uvp_resample (zbar_image_t *dst,
                                   const zbar_image_t *src,
                                   const zbar_format_def_t *srcfmt)
 {
-    unsigned long dstn, dstm2;
     uv_roundup(dst, dstfmt);
-    dstn = dst->width * dst->height;
-    dstm2 = uvp_size(dst, dstfmt) * 2;
+    unsigned long dstn = dst->width * dst->height;
+    unsigned long dstm2 = uvp_size(dst, dstfmt) * 2;
     dst->datalen = dstn + dstm2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
     convert_y_resize(dst, dstfmt, src, srcfmt, dstn);
     if(dstm2)
-        memset((uint8_t*)dst->data + dstn, 0x80, dstm2);
+        memset((void*)dst->data + dstn, 0x80, dstm2);
 }
 
 /* rearrange interleaved UV componets */
@@ -520,23 +508,19 @@ static void convert_uv_resample (zbar_image_t *dst,
                                  const zbar_image_t *src,
                                  const zbar_format_def_t *srcfmt)
 {
-    unsigned long dstn;
-    uint8_t *dstp, flags;
-    const uint8_t *srcp;
-    unsigned srcl, x, y;
-    uint8_t y0 = 0, y1 = 0, u = 0x80, v = 0x80;
-
     uv_roundup(dst, dstfmt);
-    dstn = dst->width * dst->height;
+    unsigned long dstn = dst->width * dst->height;
     dst->datalen = dstn + uvp_size(dst, dstfmt) * 2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    uint8_t *dstp = (void*)dst->data;
 
-    flags = (srcfmt->p.yuv.packorder ^ dstfmt->p.yuv.packorder) & 1;
-    srcp = src->data;
+    uint8_t flags = (srcfmt->p.yuv.packorder ^ dstfmt->p.yuv.packorder) & 1;
+    const uint8_t *srcp = src->data;
 
-    srcl = src->width + (src->width >> srcfmt->p.yuv.xsub2);
+    unsigned srcl = src->width + (src->width >> srcfmt->p.yuv.xsub2);
+    unsigned x, y;
+    uint8_t y0 = 0, y1 = 0, u = 0x80, v = 0x80;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
             srcp -= srcl;
@@ -576,29 +560,25 @@ static void convert_yuvp_to_rgb (zbar_image_t *dst,
                                  const zbar_image_t *src,
                                  const zbar_format_def_t *srcfmt)
 {
-    uint8_t *dstp, *srcy;
-    int drbits, drbit0, dgbits, dgbit0, dbbits, dbbit0;
-    unsigned long srcm, srcn;
-    unsigned x, y;
-    uint32_t p = 0;
-
     dst->datalen = dst->width * dst->height * dstfmt->p.rgb.bpp;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    uint8_t *dstp = (void*)dst->data;
 
-    drbits = RGB_SIZE(dstfmt->p.rgb.red);
-    drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
-    dgbits = RGB_SIZE(dstfmt->p.rgb.green);
-    dgbit0 = RGB_OFFSET(dstfmt->p.rgb.green);
-    dbbits = RGB_SIZE(dstfmt->p.rgb.blue);
-    dbbit0 = RGB_OFFSET(dstfmt->p.rgb.blue);
+    int drbits = RGB_SIZE(dstfmt->p.rgb.red);
+    int drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
+    int dgbits = RGB_SIZE(dstfmt->p.rgb.green);
+    int dgbit0 = RGB_OFFSET(dstfmt->p.rgb.green);
+    int dbbits = RGB_SIZE(dstfmt->p.rgb.blue);
+    int dbbit0 = RGB_OFFSET(dstfmt->p.rgb.blue);
 
-    srcm = uvp_size(src, srcfmt);
-    srcn = src->width * src->height;
+    unsigned long srcm = uvp_size(src, srcfmt);
+    unsigned long srcn = src->width * src->height;
     assert(src->datalen >= srcn + 2 * srcm);
-    srcy = (void*)src->data;
+    uint8_t *srcy = (void*)src->data;
 
+    unsigned x, y;
+    uint32_t p = 0;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
             srcy -= src->width;
@@ -626,34 +606,29 @@ static void convert_rgb_to_yuvp (zbar_image_t *dst,
                                  const zbar_image_t *src,
                                  const zbar_format_def_t *srcfmt)
 {
-    unsigned long dstn, dstm2;
-    uint8_t *dsty;
-    const uint8_t *srcp;
-    int rbits, rbit0, gbits, gbit0, bbits, bbit0;
-    unsigned srcl, x, y;
-    uint16_t y0 = 0;
-
     uv_roundup(dst, dstfmt);
-    dstn = dst->width * dst->height;
-    dstm2 = uvp_size(dst, dstfmt) * 2;
+    unsigned long dstn = dst->width * dst->height;
+    unsigned long dstm2 = uvp_size(dst, dstfmt) * 2;
     dst->datalen = dstn + dstm2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
     if(dstm2)
-        memset((uint8_t*)dst->data + dstn, 0x80, dstm2);
-    dsty = (void*)dst->data;
+        memset((void*)dst->data + dstn, 0x80, dstm2);
+    uint8_t *dsty = (void*)dst->data;
 
     assert(src->datalen >= (src->width * src->height * srcfmt->p.rgb.bpp));
-    srcp = src->data;
+    const uint8_t *srcp = src->data;
 
-    rbits = RGB_SIZE(srcfmt->p.rgb.red);
-    rbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
-    gbits = RGB_SIZE(srcfmt->p.rgb.green);
-    gbit0 = RGB_OFFSET(srcfmt->p.rgb.green);
-    bbits = RGB_SIZE(srcfmt->p.rgb.blue);
-    bbit0 = RGB_OFFSET(srcfmt->p.rgb.blue);
+    int rbits = RGB_SIZE(srcfmt->p.rgb.red);
+    int rbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
+    int gbits = RGB_SIZE(srcfmt->p.rgb.green);
+    int gbit0 = RGB_OFFSET(srcfmt->p.rgb.green);
+    int bbits = RGB_SIZE(srcfmt->p.rgb.blue);
+    int bbit0 = RGB_OFFSET(srcfmt->p.rgb.blue);
 
-    srcl = src->width * srcfmt->p.rgb.bpp;
+    unsigned srcl = src->width * srcfmt->p.rgb.bpp;
+    unsigned x, y;
+    uint16_t y0 = 0;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
             srcp -= srcl;
@@ -684,33 +659,29 @@ static void convert_yuv_to_rgb (zbar_image_t *dst,
                                 const zbar_image_t *src,
                                 const zbar_format_def_t *srcfmt)
 {
-    uint8_t *dstp;
     unsigned long dstn = dst->width * dst->height;
-    int drbits, drbit0, dgbits, dgbit0, dbbits, dbbit0;
-    const uint8_t *srcp;
-    unsigned srcl, x, y;
-    uint32_t p = 0;
-
     dst->datalen = dstn * dstfmt->p.rgb.bpp;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    uint8_t *dstp = (void*)dst->data;
 
-    drbits = RGB_SIZE(dstfmt->p.rgb.red);
-    drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
-    dgbits = RGB_SIZE(dstfmt->p.rgb.green);
-    dgbit0 = RGB_OFFSET(dstfmt->p.rgb.green);
-    dbbits = RGB_SIZE(dstfmt->p.rgb.blue);
-    dbbit0 = RGB_OFFSET(dstfmt->p.rgb.blue);
+    int drbits = RGB_SIZE(dstfmt->p.rgb.red);
+    int drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
+    int dgbits = RGB_SIZE(dstfmt->p.rgb.green);
+    int dgbit0 = RGB_OFFSET(dstfmt->p.rgb.green);
+    int dbbits = RGB_SIZE(dstfmt->p.rgb.blue);
+    int dbbit0 = RGB_OFFSET(dstfmt->p.rgb.blue);
 
     assert(src->datalen >= (src->width * src->height +
                             uvp_size(src, srcfmt) * 2));
-    srcp = src->data;
+    const uint8_t *srcp = src->data;
     if(srcfmt->p.yuv.packorder & 2)
         srcp++;
 
     assert(srcfmt->p.yuv.xsub2 == 1);
-    srcl = src->width + (src->width >> 1);
+    unsigned srcl = src->width + (src->width >> 1);
+    unsigned x, y;
+    uint32_t p = 0;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
             srcp -= srcl;
@@ -746,30 +717,26 @@ static void convert_rgb_to_yuv (zbar_image_t *dst,
                                 const zbar_image_t *src,
                                 const zbar_format_def_t *srcfmt)
 {
-    uint8_t *dstp, flags;
-    const uint8_t *srcp;
-    int rbits, rbit0, gbits, gbit0, bbits, bbit0;
-    unsigned srcl, x, y;
-    uint16_t y0 = 0;
-
     uv_roundup(dst, dstfmt);
     dst->datalen = dst->width * dst->height + uvp_size(dst, dstfmt) * 2;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
-    flags = dstfmt->p.yuv.packorder & 2;
+    uint8_t *dstp = (void*)dst->data;
+    uint8_t flags = dstfmt->p.yuv.packorder & 2;
 
     assert(src->datalen >= (src->width * src->height * srcfmt->p.rgb.bpp));
-    srcp = src->data;
+    const uint8_t *srcp = src->data;
 
-    rbits = RGB_SIZE(srcfmt->p.rgb.red);
-    rbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
-    gbits = RGB_SIZE(srcfmt->p.rgb.green);
-    gbit0 = RGB_OFFSET(srcfmt->p.rgb.green);
-    bbits = RGB_SIZE(srcfmt->p.rgb.blue);
-    bbit0 = RGB_OFFSET(srcfmt->p.rgb.blue);
+    int rbits = RGB_SIZE(srcfmt->p.rgb.red);
+    int rbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
+    int gbits = RGB_SIZE(srcfmt->p.rgb.green);
+    int gbit0 = RGB_OFFSET(srcfmt->p.rgb.green);
+    int bbits = RGB_SIZE(srcfmt->p.rgb.blue);
+    int bbit0 = RGB_OFFSET(srcfmt->p.rgb.blue);
 
-    srcl = src->width * srcfmt->p.rgb.bpp;
+    unsigned srcl = src->width * srcfmt->p.rgb.bpp;
+    unsigned x, y;
+    uint16_t y0 = 0;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
             srcp -= srcl;
@@ -806,36 +773,31 @@ static void convert_rgb_resample (zbar_image_t *dst,
                                   const zbar_format_def_t *srcfmt)
 {
     unsigned long dstn = dst->width * dst->height;
-    uint8_t *dstp;
-    int drbits, drbit0, dgbits, dgbit0, dbbits, dbbit0;
-    int srbits, srbit0, sgbits, sgbit0, sbbits, sbbit0;
-    const uint8_t *srcp;
-    unsigned srcl, x, y;
-    uint32_t p = 0;
-
     dst->datalen = dstn * dstfmt->p.rgb.bpp;
     dst->data = malloc(dst->datalen);
     if(!dst->data) return;
-    dstp = (void*)dst->data;
+    uint8_t *dstp = (void*)dst->data;
 
-    drbits = RGB_SIZE(dstfmt->p.rgb.red);
-    drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
-    dgbits = RGB_SIZE(dstfmt->p.rgb.green);
-    dgbit0 = RGB_OFFSET(dstfmt->p.rgb.green);
-    dbbits = RGB_SIZE(dstfmt->p.rgb.blue);
-    dbbit0 = RGB_OFFSET(dstfmt->p.rgb.blue);
+    int drbits = RGB_SIZE(dstfmt->p.rgb.red);
+    int drbit0 = RGB_OFFSET(dstfmt->p.rgb.red);
+    int dgbits = RGB_SIZE(dstfmt->p.rgb.green);
+    int dgbit0 = RGB_OFFSET(dstfmt->p.rgb.green);
+    int dbbits = RGB_SIZE(dstfmt->p.rgb.blue);
+    int dbbit0 = RGB_OFFSET(dstfmt->p.rgb.blue);
 
     assert(src->datalen >= (src->width * src->height * srcfmt->p.rgb.bpp));
-    srcp = src->data;
+    const uint8_t *srcp = src->data;
 
-    srbits = RGB_SIZE(srcfmt->p.rgb.red);
-    srbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
-    sgbits = RGB_SIZE(srcfmt->p.rgb.green);
-    sgbit0 = RGB_OFFSET(srcfmt->p.rgb.green);
-    sbbits = RGB_SIZE(srcfmt->p.rgb.blue);
-    sbbit0 = RGB_OFFSET(srcfmt->p.rgb.blue);
+    int srbits = RGB_SIZE(srcfmt->p.rgb.red);
+    int srbit0 = RGB_OFFSET(srcfmt->p.rgb.red);
+    int sgbits = RGB_SIZE(srcfmt->p.rgb.green);
+    int sgbit0 = RGB_OFFSET(srcfmt->p.rgb.green);
+    int sbbits = RGB_SIZE(srcfmt->p.rgb.blue);
+    int sbbit0 = RGB_OFFSET(srcfmt->p.rgb.blue);
 
-    srcl = src->width * srcfmt->p.rgb.bpp;
+    unsigned srcl = src->width * srcfmt->p.rgb.bpp;
+    unsigned x, y;
+    uint32_t p = 0;
     for(y = 0; y < dst->height; y++) {
         if(y >= src->height)
             y -= srcl;
@@ -966,12 +928,14 @@ static void convert_jpeg (zbar_image_t *dst,
     if(!src->src) {
         tmp = zbar_image_create();
         tmp->format = fourcc('Y','8','0','0');
-        _zbar_image_copy_size(tmp, dst);
+        tmp->width = dst->width;
+        tmp->height = dst->height;
     }
     else {
         tmp = src->src->jpeg_img;
         assert(tmp);
-        _zbar_image_copy_size(dst, tmp);
+        dst->width = tmp->width;
+        dst->height = tmp->height;
     }
 
     const zbar_format_def_t *tmpfmt = _zbar_format_lookup(tmp->format);
@@ -981,7 +945,8 @@ static void convert_jpeg (zbar_image_t *dst,
     _zbar_convert_jpeg_to_y(tmp, tmpfmt, src, srcfmt);
 
     /* now convert to dst */
-    _zbar_image_copy_size(dst, tmp);
+    dst->width = tmp->width;
+    dst->height = tmp->height;
 
     conversion_handler_t *func =
         conversions[tmpfmt->group][dstfmt->group].func;
@@ -998,14 +963,10 @@ zbar_image_t *zbar_image_convert_resize (const zbar_image_t *src,
                                          unsigned width,
                                          unsigned height)
 {
-    const zbar_format_def_t *srcfmt, *dstfmt;
-    conversion_handler_t *func;
     zbar_image_t *dst = zbar_image_create();
     dst->format = fmt;
     dst->width = width;
     dst->height = height;
-    zbar_image_set_crop(dst, src->crop_x, src->crop_y,
-                        src->crop_w, src->crop_h);
     if(src->format == fmt &&
        src->width == width &&
        src->height == height) {
@@ -1013,8 +974,8 @@ zbar_image_t *zbar_image_convert_resize (const zbar_image_t *src,
         return(dst);
     }
 
-    srcfmt = _zbar_format_lookup(src->format);
-    dstfmt = _zbar_format_lookup(dst->format);
+    const zbar_format_def_t *srcfmt = _zbar_format_lookup(src->format);
+    const zbar_format_def_t *dstfmt = _zbar_format_lookup(dst->format);
     if(!srcfmt || !dstfmt)
         /* FIXME free dst */
         return(NULL);
@@ -1027,7 +988,8 @@ zbar_image_t *zbar_image_convert_resize (const zbar_image_t *src,
         return(dst);
     }
 
-    func = conversions[srcfmt->group][dstfmt->group].func;
+    conversion_handler_t *func =
+        conversions[srcfmt->group][dstfmt->group].func;
 
     dst->cleanup = zbar_image_free_data;
     func(dst, dstfmt, src, srcfmt);
@@ -1059,9 +1021,6 @@ int _zbar_best_format (uint32_t src,
                        uint32_t *dst,
                        const uint32_t *dsts)
 {
-    const zbar_format_def_t *srcfmt;
-    unsigned min_cost = -1;
-
     if(dst)
         *dst = 0;
     if(!dsts)
@@ -1072,16 +1031,17 @@ int _zbar_best_format (uint32_t src,
             *dst = src;
         return(0);
     }
-    srcfmt = _zbar_format_lookup(src);
+    const zbar_format_def_t *srcfmt = _zbar_format_lookup(src);
     if(!srcfmt)
         return(-1);
 
     zprintf(8, "from %.4s(%08" PRIx32 ") to", (char*)&src, src);
+    unsigned min_cost = -1;
     for(; *dsts; dsts++) {
         const zbar_format_def_t *dstfmt = _zbar_format_lookup(*dsts);
-        int cost;
         if(!dstfmt)
             continue;
+        int cost;
         if(srcfmt->group == dstfmt->group &&
            srcfmt->p.cmp == dstfmt->p.cmp)
             cost = 0;
@@ -1105,20 +1065,13 @@ int _zbar_best_format (uint32_t src,
 int zbar_negotiate_format (zbar_video_t *vdo,
                            zbar_window_t *win)
 {
-    static const uint32_t y800[2] = { fourcc('Y','8','0','0'), 0 };
-    errinfo_t *errdst;
-    const uint32_t *srcs, *dsts;
-    unsigned min_cost = -1;
-    uint32_t min_fmt = 0;
-    const uint32_t *fmt;
-
     if(!vdo && !win)
         return(0);
 
     if(win)
         (void)window_lock(win);
 
-    errdst = (vdo) ? &vdo->err : &win->err;
+    errinfo_t *errdst = (vdo) ? &vdo->err : &win->err;
     if(verify_format_sort()) {
         if(win)
             (void)window_unlock(win);
@@ -1133,16 +1086,19 @@ int zbar_negotiate_format (zbar_video_t *vdo,
                            "no input or output formats available"));
     }
 
-    srcs = (vdo) ? vdo->formats : y800;
-    dsts = (win) ? win->formats : y800;
+    static const uint32_t y800[2] = { fourcc('Y','8','0','0'), 0 };
+    const uint32_t *srcs = (vdo) ? vdo->formats : y800;
+    const uint32_t *dsts = (win) ? win->formats : y800;
 
+    unsigned min_cost = -1;
+    uint32_t min_fmt = 0;
+    const uint32_t *fmt;
     for(fmt = _zbar_formats; *fmt; fmt++) {
         /* only consider formats supported by video device */
-        uint32_t win_fmt = 0;
-        int cost;
         if(!has_format(*fmt, srcs))
             continue;
-        cost = _zbar_best_format(*fmt, &win_fmt, dsts);
+        uint32_t win_fmt = 0;
+        int cost = _zbar_best_format(*fmt, &win_fmt, dsts);
         if(cost < 0) {
             zprintf(4, "%.4s(%08" PRIx32 ") -> ? (unsupported)\n",
                     (char*)fmt, *fmt);

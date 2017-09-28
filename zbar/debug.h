@@ -23,30 +23,28 @@
 
 /* varargs variations on compile time debug spew */
 
-# include <stdio.h>
-
 #ifndef DEBUG_LEVEL
 
 # ifdef __GNUC__
     /* older versions of gcc (< 2.95) require a named varargs parameter */
-#  define dbprintf(args...) while(0)
+#  define dprintf(args...)
 # else
     /* unfortunately named vararg parameter is a gcc-specific extension */
-#  define dbprintf(...) while(0)
+#  define dprintf(...)
 # endif
 
 #else
 
+# include <stdio.h>
+
 # ifdef __GNUC__
-#  define dbprintf(level, args...) do { \
-        if((level) <= DEBUG_LEVEL)      \
-            fprintf(stderr, args);      \
-    } while(0)
+#  define dprintf(level, args...) \
+    if((level) <= DEBUG_LEVEL)    \
+        fprintf(stderr, args)
 # else
-#  define dbprintf(level, ...) do {         \
-        if((level) <= DEBUG_LEVEL)          \
-            fprintf(stderr, __VA_ARGS__);   \
-    } while(0)
+#  define dprintf(level, ...)     \
+    if((level) <= DEBUG_LEVEL)    \
+        fprintf(stderr, __VA_ARGS__)
 # endif
 
 #endif /* DEBUG_LEVEL */

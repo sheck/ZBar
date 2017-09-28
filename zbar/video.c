@@ -1,5 +1,5 @@
 /*------------------------------------------------------------------------
- *  Copyright 2007-2010 (c) Jeff Brown <spadix@users.sourceforge.net>
+ *  Copyright 2007-2009 (c) Jeff Brown <spadix@users.sourceforge.net>
  *
  *  This file is part of the ZBar Bar Code Reader.
  *
@@ -58,7 +58,6 @@ static void _zbar_video_recycle_shadow (zbar_image_t *img)
 zbar_video_t *zbar_video_create ()
 {
     zbar_video_t *vdo = calloc(1, sizeof(zbar_video_t));
-    int i;
     if(!vdo)
         return(NULL);
     err_init(&vdo->err, ZBAR_MOD_VIDEO);
@@ -74,6 +73,7 @@ zbar_video_t *zbar_video_create ()
         return(NULL);
     }
 
+    int i;
     for(i = 0; i < ZBAR_VIDEO_IMAGES_MAX; i++) {
         zbar_image_t *img = vdo->images[i] = zbar_image_create();
         if(!img) {
@@ -97,7 +97,7 @@ void zbar_video_destroy (zbar_video_t *vdo)
         int i;
         for(i = 0; i < ZBAR_VIDEO_IMAGES_MAX; i++)
             if(vdo->images[i])
-                _zbar_image_free(vdo->images[i]);
+                free(vdo->images[i]);
         free(vdo->images);
     }
     while(vdo->shadow_image) {
@@ -130,8 +130,6 @@ void zbar_video_destroy (zbar_video_t *vdo)
 int zbar_video_open (zbar_video_t *vdo,
                      const char *dev)
 {
-    char *ldev = NULL;
-    int rc;
     zbar_video_enable(vdo, 0);
     video_lock(vdo);
     if(vdo->intf != VIDEO_INVALID) {
@@ -147,6 +145,7 @@ int zbar_video_open (zbar_video_t *vdo,
     if(!dev)
         return(0);
 
+    char *ldev = NULL;
     if((unsigned char)dev[0] < 0x10) {
         /* default linux device, overloaded for other platforms */
         int id = dev[0];
@@ -154,7 +153,7 @@ int zbar_video_open (zbar_video_t *vdo,
         ldev[10] = '0' + id;
     }
 
-    rc = _zbar_video_open(vdo, dev);
+    int rc = _zbar_video_open(vdo, dev);
 
     if(ldev)
         free(ldev);
@@ -228,12 +227,12 @@ uint32_t zbar_video_get_format (const zbar_video_t *vdo)
 
 static inline int video_init_images (zbar_video_t *vdo)
 {
-    int i;
+    
     assert(vdo->datalen);
     if(vdo->iomode != VIDEO_MMAP) {
         assert(!vdo->buf);
         vdo->buflen = vdo->num_images * vdo->datalen;
-        vdo->buf = calloc(1, vdo->buflen);
+        vdo->buf = malloc(vdo->buflen);
         if(!vdo->buf)
             return(err_capture(vdo, SEV_FATAL, ZBAR_ERR_NOMEM, __func__,
                                "unable to allocate image buffers"));
@@ -241,14 +240,16 @@ static inline int video_init_images (zbar_video_t *vdo)
                 (vdo->iomode == VIDEO_READWRITE) ? "READ" : "USERPTR",
                 vdo->buflen);
     }
+    int i;
     for(i = 0; i < vdo->num_images; i++) {
         zbar_image_t *img = vdo->images[i];
         img->format = vdo->format;
-        zbar_image_set_size(img, vdo->width, vdo->height);
+        img->width = vdo->width;
+        img->height = vdo->height;
         if(vdo->iomode != VIDEO_MMAP) {
-            unsigned long offset = i * vdo->datalen;
             img->datalen = vdo->datalen;
-            img->data = (uint8_t*)vdo->buf + offset;
+            unsigned long offset = i * vdo->datalen;
+            img->data = vdo->buf + offset;
             zprintf(2, "    [%02d] @%08lx\n", i, offset);
         }
     }
@@ -258,9 +259,6 @@ static inline int video_init_images (zbar_video_t *vdo)
 int zbar_video_init (zbar_video_t *vdo,
                      unsigned long fmt)
 {
-#ifdef HAVE_LIBJPEG
-    const zbar_format_def_t *vidfmt;
-#endif
     if(vdo->initialized)
         /* FIXME re-init different format? */
         return(err_capture(vdo, SEV_ERROR, ZBAR_ERR_INVALID, __func__,
@@ -272,9 +270,8 @@ int zbar_video_init (zbar_video_t *vdo,
     if(video_init_images(vdo))
         return(-1);
 #ifdef HAVE_LIBJPEG
-    vidfmt = _zbar_format_lookup(fmt);
+    const zbar_format_def_t *vidfmt = _zbar_format_lookup(fmt);
     if(vidfmt && vidfmt->group == ZBAR_FMT_JPEG) {
-        zbar_image_t *img;
         /* prepare for decoding */
         if(!vdo->jpeg)
             vdo->jpeg = _zbar_jpeg_decomp_create();
@@ -282,9 +279,10 @@ int zbar_video_init (zbar_video_t *vdo,
             zbar_image_destroy(vdo->jpeg_img);
 
         /* create intermediate image for decoder to use*/
-        img = vdo->jpeg_img = zbar_image_create();
+        zbar_image_t *img = vdo->jpeg_img = zbar_image_create();
         img->format = fourcc('Y','8','0','0');
-        zbar_image_set_size(img, vdo->width, vdo->height);
+        img->width = vdo->width;
+        img->height = vdo->height;
         img->datalen = vdo->width * vdo->height;
     }
 #endif
@@ -335,9 +333,6 @@ int zbar_video_enable (zbar_video_t *vdo,
 
 zbar_image_t *zbar_video_next_image (zbar_video_t *vdo)
 {
-    unsigned frame;
-    zbar_image_t *img;
-
     if(video_lock(vdo))
         return(NULL);
     if(!vdo->active) {
@@ -345,8 +340,8 @@ zbar_image_t *zbar_video_next_image (zbar_video_t *vdo)
         return(NULL);
     }
 
-    frame = vdo->frame++;
-    img = vdo->dq(vdo);
+    unsigned frame = vdo->frame++;
+    zbar_image_t *img = vdo->dq(vdo);
     if(img) {
         img->seq = frame;
         if(vdo->num_images < 2) {
@@ -367,7 +362,8 @@ zbar_image_t *zbar_video_next_image (zbar_video_t *vdo)
                 /* recycle the shadow images */
 
                 img->format = vdo->format;
-                zbar_image_set_size(img, vdo->width, vdo->height);
+                img->width = vdo->width;
+                img->height = vdo->height;
                 img->datalen = vdo->datalen;
                 img->data = malloc(vdo->datalen);
             }

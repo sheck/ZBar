@@ -1,3 +1,6 @@
+AM_CPPFLAGS = -I$(srcdir)/include
+AM_CFLAGS = -Wall -Wno-parentheses
+AM_CXXFLAGS = $(AM_CFLAGS)
 ACLOCAL_AMFLAGS = -I config
 bin_PROGRAMS =
 check_PROGRAMS =
@@ -6,10 +9,8 @@ lib_LTLIBRARIES =
 pyexec_LTLIBRARIES =
 CLEANFILES =
 DISTCLEANFILES =
-MAINTAINERCLEANFILES =
 BUILT_SOURCES =
 EXTRA_DIST =
-SUBDIRS = .
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = zbar.pc
@@ -38,9 +39,6 @@ if HAVE_QT
 include $(srcdir)/qt/Makefile.am.inc
 pkgconfig_DATA += zbar-qt.pc
 endif
-if HAVE_JAVA
-SUBDIRS += java
-endif
 if HAVE_NPAPI
 include $(srcdir)/plugin/Makefile.am.inc
 endif
@@ -49,8 +47,11 @@ include $(srcdir)/doc/Makefile.am.inc
 
 EXTRA_DIST += zbar.ico zbar.nsi
 
-EXTRA_DIST += examples/barcode.png examples/upcrpc.py examples/upcrpc.pl \
-    examples/scan_image.c examples/scan_image.cpp examples/scan_image.vcproj
+EXTRA_DIST += examples/upcrpc.pl examples/upcrpc.py examples/paginate.pl \
+    examples/barcode.png examples/processor.pl examples/processor.py \
+    examples/read_one.py examples/read_one.pl \
+    examples/scan_image.c examples/scan_image.cpp examples/scan_image.pl \
+    examples/scan_image.py examples/scan_image.vcproj
 
 EXTRA_DIST += perl/MANIFEST perl/README perl/Changes perl/COPYING.LIB \
     perl/Makefile.PL perl/typemap perl/ZBar.xs perl/ppport.h \
